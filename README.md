@@ -1,4 +1,4 @@
-# CV-Vision-Based-Navigation-for-a-Planetary-Rover
+# Vision-Based-Navigation-for-a-Planetary-Rover
 
 Communication and computing performances of planetary rovers limit their autonomous traverse distances. Moreover, for missions to Mars, manual driving is unfeasible: not only does the round trip communication time between Earth and Mars takes from 5 to 20 minutes, but contact with ground can be reached only twice per Sol. Even with the help of orbital data, planning long traverses, and avoiding all local obstacles the rover may encounter on its path, proves to be nearly an impossible task. Such rovers are expensive and out of reach for physical help, and therefore, any collision critically endangers the mission's success. Neverthless, considering future missions' programs, there is the necessity for a high degree of autonomy of these robotic assets.
 
