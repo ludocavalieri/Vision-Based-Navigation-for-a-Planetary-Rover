@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<launch>
+  
+  <!-- Load your model into Gazebo -->
+  <include file="$(find leo_erc_gazebo)/launch/leo_gazebo.launch"
+    pass_all_args="true">
+    <arg name="world_name" value="$(find vision_based_nav)/worlds/MartianSurface.world" />
+    <arg name="x" value="-17.003807" />
+    <arg name="y" value="7.617856" />
+    <arg name="z" value="1.5" />
+  </include>
+
+  <include file="$(find leo_erc_viz)/launch/rviz.launch">
+  </include>
+
+  <node name="ground_truth_filter"
+    pkg="leo_erc_gazebo"
+    type="ground_truth_filter">
+    <param name="x_offset" value="0.0" />
+    <param name="y_offset" value="0.0" />
+    <param name="z_offset" value="0.0" />
+  </node>
+</launch>
