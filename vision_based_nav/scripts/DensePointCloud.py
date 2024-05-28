@@ -25,7 +25,7 @@ class PointCloudNode():
         self.disparity = None
 
         # Camera parameters: 
-        self.f = 265.5750732421875
+        self.f = 265.5750732421875 
         self.u0 = 312.88494873046875
         self.v0 = 196.8916473388672
         self.B = 120.0
@@ -77,22 +77,23 @@ class PointCloudNode():
                         y = (v - self.v0) * z / self.f
 
                         # Generate 3D points: 
-                        X.append(x)
-                        Y.append(y)
-                        Z.append(z)
+                        X.append(x) # in mm 
+                        Y.append(y) # in mm
+                        Z.append(z) # in mm
+            self.depth = Z
 
             # self.points3D = [X, Y, Z]
-            self.points3D = [np.array(Z)/100, -np.array(X)/100, -np.array(Y)/100]
+            self.points3D = [np.array(Z), -np.array(X), -np.array(Y)]
 
             # Publish dense point cloud: 
             PointCloudMessage = PointCloud()
             PointCloudMessage.header = Header()
             PointCloudMessage.header.stamp = rospy.Time.now()
-            PointCloudMessage.header.frame_id = "camera_optical_frame"
+            PointCloudMessage.header.frame_id = "base_footprint"
 
             for i in range(len(X)):
                 # PointCloudMessage.points.append(Point32(X[i]/100, Y[i]/100, Z[i]/100))
-                PointCloudMessage.points.append(Point32(Z[i]/100, -X[i]/100, -Y[i]/100))
+                PointCloudMessage.points.append(Point32(Z[i]/10, -X[i]/10, -Y[i]/10))
             self.PointCloudPub.publish(PointCloudMessage)
 
     # Visualization: 
@@ -102,6 +103,11 @@ class PointCloudNode():
             plt.figure()
             plt.imshow(self.disparity,'gray')
             plt.title('Disparity Map')
+
+        if self.depth is not None:
+            plt.figure()
+            plt.imshow(self.depth,'gray')
+            plt.title('Depth Map')
 
         if self.points3D is not None: 
             # Plot 3D points: 

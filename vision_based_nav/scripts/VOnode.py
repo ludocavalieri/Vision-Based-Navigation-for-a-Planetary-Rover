@@ -4,9 +4,8 @@ import rospy
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
-from sensor_msgs.msg import Image, PointCloud
-import std_msgs
-from geometry_msgs.msg import Point32
+from sensor_msgs.msg import Image
+from geometry_msgs.msg import PoseStamped
 import cv2 as cv
 from cv_bridge import CvBridge
 bridge = CvBridge()
@@ -36,16 +35,18 @@ class VisualOdometryNode():
         # Initialize stereo matcher for disparity computation:
         self.stereo = cv.StereoBM.create(numDisparities=16, blockSize=15)
 
-        # Descriptor and matcher variables:
-        self.kpl1 = None
-        self.kpr1 = None
+        # Descriptor variables:
+        self.kpl1 = None # position in pixels
+        self.kpr1 = None # position in pixels
         self.desl1 = None
         self.desr1 = None
-        self.matches = None
-        self.kpl2 = None
-        self.kpr2 = None
+        self.kpl2 = None # position in pixels
+        self.kpr2 = None # position in pixels
         self.desl2 = None
         self.desr2 = None
+
+        # Matcher variables:
+        self.matches = None
         self.matches2 = None
         self.matches12 = None
         self.pts2 = None
@@ -53,15 +54,26 @@ class VisualOdometryNode():
         # Point cloud variables: 
         self.points3D = None
         self.points3D2 = None
+        self.depth = None
 
         # Camera parameters: 
-        self.K = np.array([[265.5750732421875, 0.0, 312.88494873046875],
-                           [0.0, 265.5750732421875, 196.8916473388672],
+        self.f = 265.5750732421875 # in pixels
+        self.u0 = 312.88494873046875 # in pixels
+        self.v0 = 196.8916473388672 # in pixels
+        self.B = 120.0 # in mm
+        self.K = np.array([[self.f, 0.0, self.u0],
+                           [0.0, self.f, self.v0],
                            [ 0.0, 0.0, 1.0]])
-        self.f = 265.5750732421875
-        self.u0 = 312.88494873046875
-        self.v0 = 196.8916473388672
-        self.B = 120.0
+
+        # Motion estimation variables: 
+        self.R = None
+        self.t = None
+        self.x0 = np.zeros((3,1))
+        self.Ttot = np.eye(4)
+        self.trajectory = np.zeros((1,3))
+
+        # Odometry publisher: 
+        self.PosePub = rospy.Publisher("/custom_odom", PoseStamped, queue_size=1)
     
     # Create listener callbacks: 
     def LeftCallback(self,msg):
@@ -176,20 +188,20 @@ class VisualOdometryNode():
             points4D = cv.triangulatePoints(Pl1, Pr1, ptsl1, ptsr1)
             points4D2 = cv.triangulatePoints(Pl2, Pr2, ptsl2, ptsr2)
             self.points3D = np.array(points4D[:3] / points4D[3])  # Convert from homogeneous to Cartesian coordinates
-            self.points3D2 = np.array(points4D2[:3] / points4D2[3])
+            self.points3D2 = np.array(points4D2[:3] / points4D2[3])  # Convert from homogeneous to Cartesian coordinates         
 
     # Motion Estimation: 
     def MotionEstimation3Dto2D(self): 
-        if self.points3D is None or self.points3D2 is None:
+        if self.matches12 is None:
             return
         else: 
             rospy.loginfo('Estimating motion...')  
 
             # Disparity and depth: 
-            disparity = self.stereo.compute(self.grayl1,self.grayr1).astype(np.float32)
+            disparity = self.stereo.compute(self.grayl1,self.grayr1).astype(np.float32)/16
             disparity[disparity == 0.0] = 0.1
             disparity[disparity == -1.0] = 0.1
-            depth = self.B*self.f/disparity
+            self.depth = self.B*self.f/disparity
 
             # Extract points matched between left 1 and left 2:
             ptsl_1 = np.float32([self.kpl1[m.queryIdx].pt for m in self.matches12])
@@ -197,30 +209,66 @@ class VisualOdometryNode():
 
             # Extract 3D points needed for motion estimation:
             points3D = np.zeros((0,3))
+            # min_depth = 0.02  # Adjust this value as needed
+            # max_depth = 300000.0  # Adjust this value as needed 
+
             for indices, (u,v) in enumerate(ptsl_1): 
-
                 # depth:
-                z = depth[int(v), int(u)]
+                z = self.depth[int(v), int(u)]
 
+                # Filter out points that do not fall within the specified depth range:
+                # if z < max_depth:
                 # x and y: 
-                x = (u - self.u0) * z / self.f
-                y = (v - self.v0) * z / self.f
+                x = (u - self.u0)*z/self.f
+                y = (v - self.v0)*z/self.f
 
                 # Stacking 3D points: 
                 points3D = np.vstack([points3D, np.array([x, y, z])])
+                # self.points3D = np.vstack([self.points3D, np.array([z, -x, -y])])
+            self.points3D = points3D
 
             # Solve PnP: 
-            _, rvec, t, _ = cv.solvePnPRansac(points3D, ptsl_2, self.K, None)
-            R = cv.Rodrigues(rvec)[0]
-            print(R)
-            print(t)
+            _, rvec, self.t, _ = cv.solvePnPRansac(self.points3D, ptsl_2, self.K, None)
+            self.R = cv.Rodrigues(rvec)[0]
+
+    # Trajectory Reconstruction: 
+    def TrajectoryReconstruction(self): 
+        if self.R is None and self.t is None:
+            return
+        else: 
+            rospy.loginfo('Updating position...')  
+
+            # Apply transform to get new position: 
+            self.x0 = (np.dot(self.R,self.x0)+self.t)
+            self.trajectory = np.vstack([self.trajectory, self.x0.T])
+            
+            # Tmat = np.hstack([self.R, self.t])
+            # Tmat = np.vstack([Tmat, np.array([0, 0, 0, 1])])
+            # self.Ttot = self.Ttot.dot(np.linalg.inv(Tmat))
+            
+            # Place pose estimate in i+1 to correspond to the second image, which we estimated for
+            # self.trajectory = np.vstack([self.trajectory, self.Ttot[:3,:].T])
+            
+            # Publish odom message: 
+            pose_msg = PoseStamped()
+            pose_msg.header.stamp = rospy.Time.now()
+            pose_msg.header.frame_id = "base_footprint"
+            pose_msg.pose.position.x = self.x0[0].astype(np.float32)/1000
+            pose_msg.pose.position.y = self.x0[1].astype(np.float32)/1000
+            pose_msg.pose.position.z = self.x0[2].astype(np.float32)/1000
+            pose_msg.pose.orientation.x = 1
+            pose_msg.pose.orientation.y = 0
+            pose_msg.pose.orientation.z = 0
+            pose_msg.pose.orientation.w = 0
+           
+            self.PosePub.publish(pose_msg)
 
     # Visualization:
     def PlotResults(self): 
         rospy.loginfo('Displaying results...')
 
+        # Feature detection and matching results:
         if self.left1 is not None and self.left2 is not None and self.right1 is not None and self.right2 is not None:
-            # Highlight corners in the images and draw matches:
             plt.figure()
             img = cv.drawMatches(self.left1,self.kpl1,self.right1,self.kpr1,self.matches,None,flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
             plt.imshow(img)
@@ -229,9 +277,39 @@ class VisualOdometryNode():
             img2 = cv.drawMatches(self.left2,self.kpl2,self.right2,self.kpr2,self.matches2,None,flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
             plt.imshow(img2)
             plt.title('Matched Features - t0+dt')
-            plt.show()
         else:
             rospy.loginfo('No image to display.')
+
+        # Plot depth:
+        if self.depth is not None:
+            plt.figure()
+            plt.imshow(self.depth,'gray')
+            plt.title('Depth Map')
+
+        # Triangulation results:
+        if self.points3D is not None:
+            fig = plt.figure()
+            ax = plt.axes(projection='3d')
+            for i in range(len(self.matches12)):
+                ax.scatter3D(self.points3D[i][0], self.points3D[i][1], self.points3D[i][2], marker='o', s=5, c='r', alpha=0.5)
+            plt.title('Sparse Point Cloud')
+            plt.xlabel('X')
+            plt.ylabel('Y')
+        else: 
+            rospy.loginfo('No point cloud to display')
+
+        # Plot Trajectory: 
+        if self.trajectory is not None:
+            fig = plt.figure()
+            ax = plt.axes(projection='3d')
+            xs = self.trajectory[:, 0]
+            ys = self.trajectory[:, 1]
+            zs = self.trajectory[:, 2]
+            ax.plot3D(xs, ys, zs, c='chartreuse')
+            plt.title('Trajectory')
+            
+        # Shows results:
+        plt.show()
 
     # Node main code:
     def run(self):    
@@ -241,15 +319,21 @@ class VisualOdometryNode():
         rospy.loginfo("Subscribed to /image_left and /image_right.")
 
         # Main loop:
-        rate = rospy.Rate(1)  # 10 Hz
+        rate = rospy.Rate(1)  # 1 Hz
         while not rospy.is_shutdown():
+            # Visual odometry procedure:
             self.CornerDetector()
             self.MatchingFunction()
-            self.TriangulationFunction()
+            # self.TriangulationFunction()
             self.MotionEstimation3Dto2D()
+            self.TrajectoryReconstruction()
+
+            # Update image at t0: 
             if self.left2 is not None and self.right2 is not None:
                 self.left1 = self.left2
                 self.right1 = self.right2
+
+            # Repeat:
             rate.sleep()
 
         # Plot results: 
