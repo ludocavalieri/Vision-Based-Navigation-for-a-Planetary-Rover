@@ -5,7 +5,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
 from sensor_msgs.msg import Image
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, TransformStamped
+import tf2_ros
+import tf
 import cv2 as cv
 from cv_bridge import CvBridge
 bridge = CvBridge()
@@ -29,38 +31,35 @@ class VisualOdometryNode():
         self.SIFT = cv.SIFT_create()
         self.BF = cv.BFMatcher(cv.NORM_L2)
 
-        # Create ICP: 
-        self.ICP = cv.ppf_match_3d_ICP(100)
+        # Select detector: 
+        self.detector = 'sift' # SIFT better performance, TO DO: try SURF
 
         # Initialize stereo matcher for disparity computation:
         self.stereo = cv.StereoBM.create(numDisparities=16, blockSize=15)
 
         # Descriptor variables:
-        self.kpl1 = None # position in pixels
-        self.kpr1 = None # position in pixels
+        self.kpl1 = None 
+        self.kpr1 = None 
         self.desl1 = None
         self.desr1 = None
-        self.kpl2 = None # position in pixels
-        self.kpr2 = None # position in pixels
+        self.kpl2 = None 
         self.desl2 = None
-        self.desr2 = None
 
         # Matcher variables:
         self.matches = None
-        self.matches2 = None
         self.matches12 = None
         self.pts2 = None
 
-        # Point cloud variables: 
+        # Depth variables: 
         self.points3D = None
-        self.points3D2 = None
+        self.disparity = None
         self.depth = None
 
         # Camera parameters: 
-        self.f = 265.5750732421875 # in pixels
-        self.u0 = 312.88494873046875 # in pixels
-        self.v0 = 196.8916473388672 # in pixels
-        self.B = 120.0 # in mm
+        self.f = 527.2972398956961
+        self.u0 = 658.8206787109375
+        self.v0 = 372.25787353515625
+        self.B = 120.0
         self.K = np.array([[self.f, 0.0, self.u0],
                            [0.0, self.f, self.v0],
                            [ 0.0, 0.0, 1.0]])
@@ -68,9 +67,9 @@ class VisualOdometryNode():
         # Motion estimation variables: 
         self.R = None
         self.t = None
-        self.x0 = np.zeros((3,1))
-        self.Ttot = np.eye(4)
-        self.trajectory = np.zeros((1,3))
+        self.Rtot = np.eye(3)
+        self.x0 = np.array([[0, 0, 0]]).reshape(3,1)
+        self.trajectory = np.array([[0, 0, 0]])
 
         # Odometry publisher: 
         self.PosePub = rospy.Publisher("/custom_odom", PoseStamped, queue_size=1)
@@ -84,111 +83,76 @@ class VisualOdometryNode():
         rospy.loginfo('Message received from camera right.')
         self.right2 = bridge.imgmsg_to_cv2(msg, "rgb8")
 
-    # Corner detection: 
-    def CornerDetector(self): 
+    # Feature detection: 
+    def FeatureDetector(self): 
         if self.left1 is None or self.left2 is None or self.right1 is None or self.right2 is None:
             rospy.loginfo('Waiting for images...')
             return
-        else: 
+        else:
             # Convert images to grayscale:
             self.grayl1 = cv.cvtColor(self.left1, cv.COLOR_RGB2GRAY)
-            grayl2 = cv.cvtColor(self.left2, cv.COLOR_RGB2GRAY)
+            self.grayl2 = cv.cvtColor(self.left2, cv.COLOR_RGB2GRAY)
             self.grayr1 = cv.cvtColor(self.right1, cv.COLOR_RGB2GRAY)
-            grayr2 = cv.cvtColor(self.right2, cv.COLOR_RGB2GRAY)
 
-            # Detect corners:
-            cornerl1 = cv.cornerHarris(np.float32(self.grayl1), 2, 3, 0.04)
-            cornerl2 = cv.cornerHarris(np.float32(grayl2), 2, 3, 0.04)
-            cornerr1 = cv.cornerHarris(np.float32(self.grayr1), 2, 3, 0.04)
-            cornerr2 = cv.cornerHarris(np.float32(grayr2), 2, 3, 0.04)
-
-            # Apply threshold:
-            cornerl1 = np.nonzero(cornerl1 > 0.05 * cornerl1.max())
-            cornerl2 = np.nonzero(cornerl2 > 0.05 * cornerl2.max())
-            cornerr1 = np.nonzero(cornerr1 > 0.05 * cornerr1.max())
-            cornerr2 = np.nonzero(cornerr2 > 0.05 * cornerr2.max())
-
-            # Convert corners to keypoints
-            self.kpl1 = [cv.KeyPoint(float(cornerl1[1][i]), float(cornerl1[0][i]), 3) for i in range(len(cornerl1[0]))]
-            self.kpr1 = [cv.KeyPoint(float(cornerr1[1][i]), float(cornerr1[0][i]), 3) for i in range(len(cornerr1[0]))]
-            self.kpl2 = [cv.KeyPoint(float(cornerl2[1][i]), float(cornerl2[0][i]), 3) for i in range(len(cornerl2[0]))]
-            self.kpr2 = [cv.KeyPoint(float(cornerr2[1][i]), float(cornerr2[0][i]), 3) for i in range(len(cornerr2[0]))]
-
-            # Compute SIFT describe for corners: 
-            self.kpl1, self.desl1 = self.SIFT.compute(self.grayl1, self.kpl1)
-            self.kpr1, self.desr1 = self.SIFT.compute(self.grayr1, self.kpr1)
-            self.kpl2, self.desl2 = self.SIFT.compute(grayl2, self.kpl2)
-            self.kpr2, self.desr2 = self.SIFT.compute(grayr2, self.kpr2)
+            # Feature detection algorithm: 
+            if self.detector == 'harris':
+                # Detect corners:
+                cornerl1 = cv.cornerHarris(np.float32(self.grayl1), 2, 3, 0.04)
+                cornerl2 = cv.cornerHarris(np.float32(self.grayl2), 2, 3, 0.04)
+                cornerr1 = cv.cornerHarris(np.float32(self.grayr1), 2, 3, 0.04)
+                
+                # Apply threshold:
+                cornerl1 = np.nonzero(cornerl1 > 0.05 * cornerl1.max())
+                cornerl2 = np.nonzero(cornerl2 > 0.05 * cornerl2.max())
+                cornerr1 = np.nonzero(cornerr1 > 0.05 * cornerr1.max())
+                
+                # Convert corners to keypoints
+                self.kpl1 = [cv.KeyPoint(float(cornerl1[1][i]), float(cornerl1[0][i]), 3) for i in range(len(cornerl1[0]))]
+                self.kpr1 = [cv.KeyPoint(float(cornerr1[1][i]), float(cornerr1[0][i]), 3) for i in range(len(cornerr1[0]))]
+                self.kpl2 = [cv.KeyPoint(float(cornerl2[1][i]), float(cornerl2[0][i]), 3) for i in range(len(cornerl2[0]))]
+                
+                # Compute SIFT descriptor for corners: 
+                self.kpl1, self.desl1 = self.SIFT.compute(self.grayl1, self.kpl1)
+                self.kpr1, self.desr1 = self.SIFT.compute(self.grayr1, self.kpr1)
+                self.kpl2, self.desl2 = self.SIFT.compute(self.grayl2, self.kpl2)
+            elif self.detector == 'sift':
+                # Use SIFT to detect and describe features:
+                self.kpl1, self.desl1 = self.SIFT.detectAndCompute(self.grayl1, None)
+                self.kpl2, self.desl2 = self.SIFT.detectAndCompute(self.grayl2, None)
+                self.kpr1, self.desr1 = self.SIFT.detectAndCompute(self.grayr1, None)
 
     # Matching:
     def MatchingFunction(self): 
-        if self.desl1 is None and self.desr1 is None and self.desl2 is None and self.desr2 is None:
+        if self.desl1 is None and self.desr1 is None and self.desl2 is None:
             return
         else: 
-            rospy.loginfo('Matching corners...')
+            rospy.loginfo('Matching features...')
 
             # Matching images exploiting SIFT descriptor: 
             self.matches = self.BF.knnMatch(self.desl1,self.desr1, k=2)
-            self.matches2 = self.BF.knnMatch(self.desl2,self.desr2, k=2)
             self.matches12 = self.BF.knnMatch(self.desl1,self.desl2, k=2)
+            self.matches = sorted(self.matches, key = lambda x:x[0].distance)
+            self.matches12 = sorted(self.matches12, key = lambda x:x[0].distance)
+            
+            print('Number of matches before filtering - l1/r1:', len(self.matches))
+            print('Number of matches before filtering - l1/l2:', len(self.matches12))
 
             # Apply ratio test as per Lowe's paper:
             good_matches = []
-            good_matches2 = []
             good_matches12 = []
 
             for m, n in self.matches:
-                if m.distance < 0.80 * n.distance:
+                if m.distance < 0.75 * n.distance:
                     good_matches.append(m)
             self.matches = good_matches
 
-            for m, n in self.matches2:
-                if m.distance < 0.80 * n.distance:
-                    good_matches2.append(m)
-            self.matches2 = good_matches2
-
             for m, n in self.matches12:
-                if m.distance < 0.80 * n.distance:
+                if m.distance < 0.75 * n.distance:
                     good_matches12.append(m)
             self.matches12 = good_matches12
 
-    # Triangulation: 
-    def TriangulationFunction(self):
-        if self.matches is None or len(self.matches) < 8:
-            rospy.loginfo('Not enough matches to perform triangulation.')
-            return
-        else: 
-            rospy.loginfo('Triangulating features...')
-            
-            # Estimate essential matrix: 
-            ptsl1 = np.float32([self.kpl1[m.queryIdx].pt for m in self.matches]).reshape(-1, 1, 2)
-            ptsr1 = np.float32([self.kpr1[m.trainIdx].pt for m in self.matches]).reshape(-1, 1, 2)
-            ptsl2 = np.float32([self.kpl2[m.queryIdx].pt for m in self.matches2]).reshape(-1, 1, 2)
-            ptsr2 = np.float32([self.kpr2[m.trainIdx].pt for m in self.matches2]).reshape(-1, 1, 2)
-            E1, mask = cv.findEssentialMat(ptsl1, ptsr1, self.K, method=cv.RANSAC, prob=0.999, threshold=1.0)
-            E2, mask2 = cv.findEssentialMat(ptsl2, ptsr2, self.K, method=cv.RANSAC, prob=0.999, threshold=1.0)
-
-            # Estimate camera pose:
-            _, R1, t1, _ = cv.recoverPose(E1, ptsl1, ptsr1, self.K, mask=mask)
-            _, R2, t2, _ = cv.recoverPose(E2, ptsl2, ptsr2, self.K, mask=mask2)
-
-            # Build the projection matrices for the two cameras:
-            Pl1 = np.hstack((np.eye(3), np.zeros((3, 1))))
-            Pr1 = np.hstack((R1, t1))
-            Pl2 = np.hstack((np.eye(3), np.zeros((3, 1))))
-            Pr2 = np.hstack((R2, t2))
-
-            # Convert the projection matrices to the camera coordinate system:
-            Pl1 = self.K @ Pl1
-            Pr1 = self.K @ Pr1
-            Pl2 = self.K @ Pl2
-            Pr2 = self.K @ Pr2
-
-            # Triangulate the 3D points:
-            points4D = cv.triangulatePoints(Pl1, Pr1, ptsl1, ptsr1)
-            points4D2 = cv.triangulatePoints(Pl2, Pr2, ptsl2, ptsr2)
-            self.points3D = np.array(points4D[:3] / points4D[3])  # Convert from homogeneous to Cartesian coordinates
-            self.points3D2 = np.array(points4D2[:3] / points4D2[3])  # Convert from homogeneous to Cartesian coordinates         
+            print('Number of matches after filtering - l1/r1:', len(self.matches))
+            print('Number of matches after filtering - l1/l2:', len(self.matches12))
 
     # Motion Estimation: 
     def MotionEstimation3Dto2D(self): 
@@ -198,9 +162,9 @@ class VisualOdometryNode():
             rospy.loginfo('Estimating motion...')  
 
             # Disparity and depth: 
-            disparity = self.stereo.compute(self.grayl1,self.grayr1).astype(np.float32)/16
-            disparity[disparity == 0.0] = 0.1
-            disparity[disparity == -1.0] = 0.1
+            disparity = self.stereo.compute(self.grayl1,self.grayr1)/16
+            disparity[disparity <= 0.0] = 0.1
+            self.disparity = disparity
             self.depth = self.B*self.f/disparity
 
             # Extract points matched between left 1 and left 2:
@@ -209,27 +173,58 @@ class VisualOdometryNode():
 
             # Extract 3D points needed for motion estimation:
             points3D = np.zeros((0,3))
-            # min_depth = 0.02  # Adjust this value as needed
-            # max_depth = 300000.0  # Adjust this value as needed 
+            min_depth = 200  # Adjust this value as needed
+            max_depth = 250000.0  # Adjust this value as needed 
+            valid_indices = []
 
             for indices, (u,v) in enumerate(ptsl_1): 
                 # depth:
                 z = self.depth[int(v), int(u)]
 
                 # Filter out points that do not fall within the specified depth range:
-                # if z < max_depth:
-                # x and y: 
-                x = (u - self.u0)*z/self.f
-                y = (v - self.v0)*z/self.f
+                if z > min_depth and z < max_depth:
+                    # x and y: 
+                    x = (u-self.u0)*z/self.f
+                    y = (v-self.v0)*z/self.f
 
-                # Stacking 3D points: 
-                points3D = np.vstack([points3D, np.array([x, y, z])])
-                # self.points3D = np.vstack([self.points3D, np.array([z, -x, -y])])
+                    # Stacking 3D points: 
+                    points3D = np.vstack([points3D, np.array([x, y, z])])
+
+                    # Store valid indices: 
+                    valid_indices.append(indices)
+
+            # Define 3D points and 2D points to keep: 
             self.points3D = points3D
+            ptsl2_depthlimited = ptsl_2[valid_indices]
 
-            # Solve PnP: 
-            _, rvec, self.t, _ = cv.solvePnPRansac(self.points3D, ptsl_2, self.K, None)
-            self.R = cv.Rodrigues(rvec)[0]
+            # Solve PnP:
+            try: 
+                _, rvec, self.t, inliers = cv.solvePnPRansac(self.points3D, ptsl2_depthlimited, self.K, None)
+                self.R = cv.Rodrigues(rvec)[0]
+                print(self.R, self.t)
+                print('Number of inliers: {}/{} matched features'.format(len(inliers), len(self.matches12)))
+            except: 
+                self.R = np.eye(3)
+                self.t = np.zeros((3,1))
+
+    def MotionEstimation2Dto2D(self):
+        if self.matches12 is None:
+            return
+        else: 
+            rospy.loginfo('Estimating motion...')
+
+            # Extract points matched between left 1 and left 2:
+            ptsl_1 = np.float32([self.kpl1[m.queryIdx].pt for m in self.matches12])
+            ptsl_2 = np.float32([self.kpl2[m.trainIdx].pt for m in self.matches12])
+            
+            # Estimate essential matrix and estimate camera pose:
+            try:
+                E = cv.findEssentialMat(ptsl_1, ptsl_2, self.K, method=cv.RANSAC, prob=0.999, threshold=1.0)[0]
+                _, self.R, self.t, _ = cv.recoverPose(E, ptsl_1, ptsl_2, self.K)
+            except: 
+                self.R = np.eye(3)
+                self.t = np.zeros((3,1))
+            print(self.R,self.t)
 
     # Trajectory Reconstruction: 
     def TrajectoryReconstruction(self): 
@@ -238,65 +233,77 @@ class VisualOdometryNode():
         else: 
             rospy.loginfo('Updating position...')  
 
-            # Apply transform to get new position: 
-            self.x0 = (np.dot(self.R,self.x0)+self.t)
+            # Apply transform to get new position:
+            self.Rtot = self.Rtot @ self.R.T
+            self.x0 = self.x0+np.dot(self.Rtot,-self.t)
             self.trajectory = np.vstack([self.trajectory, self.x0.T])
-            
-            # Tmat = np.hstack([self.R, self.t])
-            # Tmat = np.vstack([Tmat, np.array([0, 0, 0, 1])])
-            # self.Ttot = self.Ttot.dot(np.linalg.inv(Tmat))
-            
-            # Place pose estimate in i+1 to correspond to the second image, which we estimated for
-            # self.trajectory = np.vstack([self.trajectory, self.Ttot[:3,:].T])
-            
-            # Publish odom message: 
+
+            # Initialize odom message:
             pose_msg = PoseStamped()
             pose_msg.header.stamp = rospy.Time.now()
-            pose_msg.header.frame_id = "base_footprint"
-            pose_msg.pose.position.x = self.x0[0].astype(np.float32)/1000
-            pose_msg.pose.position.y = self.x0[1].astype(np.float32)/1000
-            pose_msg.pose.position.z = self.x0[2].astype(np.float32)/1000
-            pose_msg.pose.orientation.x = 1
-            pose_msg.pose.orientation.y = 0
-            pose_msg.pose.orientation.z = 0
-            pose_msg.pose.orientation.w = 0
-           
+            pose_msg.header.frame_id = "camera_link"
+            
+            # Convert the position to float:
+            pose_msg.pose.position.x = float(self.x0[0])/1000
+            pose_msg.pose.position.y = float(self.x0[1])/1000
+            pose_msg.pose.position.z = float(self.x0[2])/1000
+            
+            # Ensure orientation is a valid quaternion:
+            pose_msg.pose.orientation.x = 1.0
+            pose_msg.pose.orientation.y = 0.0
+            pose_msg.pose.orientation.z = 0.0
+            pose_msg.pose.orientation.w = 0.0
+
+            # Publish message:
             self.PosePub.publish(pose_msg)
+            print(pose_msg)
+
+            # Broadcast transform: 
+            Mat = np.eye(4)
+            Mat[:3,:3] = self.Rtot
+            quat = tf.transformations.quaternion_from_matrix(Mat)
+            tf2Broadcast = tf2_ros.TransformBroadcaster()
+            tf2Stamp = TransformStamped()
+            tf2Stamp.header.stamp = rospy.Time.now()
+            tf2Stamp.header.frame_id = 'map'
+            tf2Stamp.child_frame_id = 'rover_custom'
+            tf2Stamp.transform.translation.x = self.x0[0]/1000
+            tf2Stamp.transform.translation.y = self.x0[1]/1000
+            tf2Stamp.transform.translation.z = self.x0[2]/1000
+            tf2Stamp.transform.rotation.x = quat[0]
+            tf2Stamp.transform.rotation.y = quat[1]
+            tf2Stamp.transform.rotation.z = quat[2]
+            tf2Stamp.transform.rotation.w = quat[3]
+            tf2Broadcast.sendTransform(tf2Stamp)
 
     # Visualization:
     def PlotResults(self): 
         rospy.loginfo('Displaying results...')
 
         # Feature detection and matching results:
-        if self.left1 is not None and self.left2 is not None and self.right1 is not None and self.right2 is not None:
+        if self.left1 is not None and self.left2 is not None and self.right1 is not None:
             plt.figure()
             img = cv.drawMatches(self.left1,self.kpl1,self.right1,self.kpr1,self.matches,None,flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
             plt.imshow(img)
-            plt.title('Matched Features - t0')
+            plt.title('Matched Features - left t0 and right t0')
             plt.figure()
-            img2 = cv.drawMatches(self.left2,self.kpl2,self.right2,self.kpr2,self.matches2,None,flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
-            plt.imshow(img2)
-            plt.title('Matched Features - t0+dt')
-        else:
-            rospy.loginfo('No image to display.')
+            img = cv.drawMatches(self.left1,self.kpl1,self.left2,self.kpl2,self.matches12,None,flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+            plt.imshow(img)
+            plt.title('Matched Features - left t0 and left t0+dt')
+
+        # Plot disparity:
+        if self.disparity is not None:
+            plt.figure()
+            plt.imshow(self.disparity,'jet')
+            plt.colorbar()
+            plt.title('Disparity Map')
 
         # Plot depth:
         if self.depth is not None:
             plt.figure()
-            plt.imshow(self.depth,'gray')
+            plt.imshow(self.depth,'jet')
+            plt.colorbar()
             plt.title('Depth Map')
-
-        # Triangulation results:
-        if self.points3D is not None:
-            fig = plt.figure()
-            ax = plt.axes(projection='3d')
-            for i in range(len(self.matches12)):
-                ax.scatter3D(self.points3D[i][0], self.points3D[i][1], self.points3D[i][2], marker='o', s=5, c='r', alpha=0.5)
-            plt.title('Sparse Point Cloud')
-            plt.xlabel('X')
-            plt.ylabel('Y')
-        else: 
-            rospy.loginfo('No point cloud to display')
 
         # Plot Trajectory: 
         if self.trajectory is not None:
@@ -305,7 +312,7 @@ class VisualOdometryNode():
             xs = self.trajectory[:, 0]
             ys = self.trajectory[:, 1]
             zs = self.trajectory[:, 2]
-            ax.plot3D(xs, ys, zs, c='chartreuse')
+            plt.plot(xs, ys, zs, c='blue')
             plt.title('Trajectory')
             
         # Shows results:
@@ -319,25 +326,22 @@ class VisualOdometryNode():
         rospy.loginfo("Subscribed to /image_left and /image_right.")
 
         # Main loop:
-        rate = rospy.Rate(1)  # 1 Hz
+        rate = rospy.Rate(0.2)  # 0.2 Hz -> if the frequency is too high, the time step is too small and the disparity computation produces larger errors, if it's too low the trajectory isn't sufficiently smooth
         while not rospy.is_shutdown():
             # Visual odometry procedure:
-            self.CornerDetector()
+            self.FeatureDetector()
             self.MatchingFunction()
-            # self.TriangulationFunction()
             self.MotionEstimation3Dto2D()
             self.TrajectoryReconstruction()
 
             # Update image at t0: 
-            if self.left2 is not None and self.right2 is not None:
-                self.left1 = self.left2
-                self.right1 = self.right2
+            self.left1 = self.left2
+            self.right1 = self.right2
 
             # Repeat:
             rate.sleep()
-
-        # Plot results: 
-        self.PlotResults()
+        
+        self.PlotResults() # bag
 
 # Run dead reckoning node: 
 if __name__ == '__main__':
@@ -345,4 +349,6 @@ if __name__ == '__main__':
         node = VisualOdometryNode()
         node.run()
     except rospy.ROSInterruptException:
+        # Plot results: 
+        node.PlotResults() # simulation
         pass

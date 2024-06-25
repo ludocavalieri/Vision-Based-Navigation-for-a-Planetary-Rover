@@ -8,6 +8,8 @@
         <geometry>
           <mesh>
             <uri>model://mars_like_environment/meshes/model.dae</uri>
+            <pos>0 0 0</pos>
+            <size>50 50 4.820803273566</size>
           </mesh>
         </geometry>
       </visual>

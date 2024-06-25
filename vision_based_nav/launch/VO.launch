@@ -2,6 +2,5 @@
 
     <node pkg="vision_based_nav" type="VOnode.py" name="VOnode" />
     <node pkg="vision_based_nav" type="LocalizationTest.py" name="LocalizationTest" />
-    <node pkg="vision_based_nav" type="DensePointCloud.py" name="DensePointCloud" />
 
 </launch>

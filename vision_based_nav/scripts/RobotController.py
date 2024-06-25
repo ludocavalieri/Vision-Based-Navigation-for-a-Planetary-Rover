@@ -11,7 +11,7 @@ class RobotController():
     def __init__(self): 
         # Define commanded velocities: 
         self.CMDlinvel = 0.5
-        self.CMDangvel = 0.5
+        self.CMDangvel = 1
 
         # Define actuated velocities: 
         self.TRUElinvel = 0
@@ -42,7 +42,7 @@ class RobotController():
                       
         Initial velocity values: 
         linear velocity:            angular velocity: 
-        0.5                         0.5
+        0.5                         1.0
 
         """)
 
