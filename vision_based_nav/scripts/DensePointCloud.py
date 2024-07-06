@@ -132,7 +132,7 @@ class PointCloudNode():
         for i in range(len(self.X)): 
             # Extract coordinates: 
             x = self.X[i]/1000
-            y = self.Y[i]/1000
+            y = -self.Z[i]/1000
 
             # Define grid coordinates: 
             grid_x = int((x - costmap.info.origin.position.x) / self.resolution)

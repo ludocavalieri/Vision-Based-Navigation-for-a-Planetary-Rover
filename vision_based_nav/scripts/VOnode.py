@@ -27,12 +27,21 @@ class VisualOdometryNode():
         self.grayl1 = None
         self.grayl2 = None
 
-        # Create descriptor and matcher:
-        self.SIFT = cv.SIFT_create()
-        self.BF = cv.BFMatcher(cv.NORM_L2)
-
         # Select detector: 
-        self.detector = 'sift' # SIFT better performance, TO DO: try SURF
+        self.detector = 'orb' # options: Harris, SIFT, SURF, ORB
+
+        # Create descriptor and matcher:
+        if self.detector == 'sift' or self.detector == 'harris': 
+            self.det = cv.SIFT_create()
+            self.BF = cv.BFMatcher(cv.NORM_L2)
+        elif self.detector == 'surf': 
+            self.det = cv.xfeatures2d.SURF_create()
+            self.BF = cv.BFMatcher(cv.NORM_L2)
+        elif self.detector == 'orb': 
+            self.det = cv.ORB_create()
+            self.BF = cv.BFMatcher(cv.NORM_HAMMING2)
+        else: 
+            print('Unrecognized detector.')
 
         # Initialize stereo matcher for disparity computation:
         self.stereo = cv.StereoBM.create(numDisparities=16, blockSize=15)
@@ -112,15 +121,15 @@ class VisualOdometryNode():
                 self.kpl2 = [cv.KeyPoint(float(cornerl2[1][i]), float(cornerl2[0][i]), 3) for i in range(len(cornerl2[0]))]
                 
                 # Compute SIFT descriptor for corners: 
-                self.kpl1, self.desl1 = self.SIFT.compute(self.grayl1, self.kpl1)
-                self.kpr1, self.desr1 = self.SIFT.compute(self.grayr1, self.kpr1)
-                self.kpl2, self.desl2 = self.SIFT.compute(self.grayl2, self.kpl2)
-            elif self.detector == 'sift':
-                # Use SIFT to detect and describe features:
-                self.kpl1, self.desl1 = self.SIFT.detectAndCompute(self.grayl1, None)
-                self.kpl2, self.desl2 = self.SIFT.detectAndCompute(self.grayl2, None)
-                self.kpr1, self.desr1 = self.SIFT.detectAndCompute(self.grayr1, None)
-
+                self.kpl1, self.desl1 = self.det.compute(self.grayl1, self.kpl1)
+                self.kpr1, self.desr1 = self.det.compute(self.grayr1, self.kpr1)
+                self.kpl2, self.desl2 = self.det.compute(self.grayl2, self.kpl2)
+            elif self.detector == 'sift' or self.detector == 'surf' or self.detector == 'orb':
+                # Use SIFT/SURF/ORB to detect and describe features:
+                self.kpl1, self.desl1 = self.det.detectAndCompute(self.grayl1, None)
+                self.kpl2, self.desl2 = self.det.detectAndCompute(self.grayl2, None)
+                self.kpr1, self.desr1 = self.det.detectAndCompute(self.grayr1, None)
+            
     # Matching:
     def MatchingFunction(self): 
         if self.desl1 is None and self.desr1 is None and self.desl2 is None:
@@ -326,7 +335,7 @@ class VisualOdometryNode():
         rospy.loginfo("Subscribed to /image_left and /image_right.")
 
         # Main loop:
-        rate = rospy.Rate(0.2)  # 0.2 Hz -> if the frequency is too high, the time step is too small and the disparity computation produces larger errors, if it's too low the trajectory isn't sufficiently smooth
+        rate = rospy.Rate(0.2)  # 0.2 Hz -> if the frequency is too high, the time step is too small and the disparity computation produces larger errors, if it's too low the trajectory isn't sufficiently smooth (a lot depends on simulated environment, few features -> lower frequency is needed)
         while not rospy.is_shutdown():
             # Visual odometry procedure:
             self.FeatureDetector()

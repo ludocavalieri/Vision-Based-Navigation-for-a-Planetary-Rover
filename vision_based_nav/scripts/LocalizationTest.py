@@ -93,7 +93,6 @@ class LocalizationTest():
         plt.grid(True)
 
         # Error plot:
-
         fig2, (ax1, ax2) = plt.subplots(1, 2)  
         ax1.plot(self.error, label='Error',color='red') 
         ax1.set_ylabel('Error [m]')

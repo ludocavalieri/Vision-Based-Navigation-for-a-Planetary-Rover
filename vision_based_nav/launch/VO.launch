@@ -1,6 +1,0 @@
-<launch>
-
-    <node pkg="vision_based_nav" type="VOnode.py" name="VOnode" />
-    <node pkg="vision_based_nav" type="LocalizationTest.py" name="LocalizationTest" />
-
-</launch>
