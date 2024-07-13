@@ -3,6 +3,7 @@
 import rospy
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.cluster import DBSCAN
 from sensor_msgs.msg import Image, PointCloud
 from geometry_msgs.msg import Point32
 from std_msgs.msg import Header
@@ -43,7 +44,7 @@ class PointCloudNode():
         self.height = 400  # Number of cells in the height
 
         # Initialize stereo matcher for disparity computation:
-        self.stereo = cv.StereoBM.create(numDisparities=16, blockSize=15)
+        self.stereo = cv.StereoBM.create(numDisparities=5*16, blockSize=13)
 
         # Generate publisher
         self.PointCloudPub = rospy.Publisher('dense_point_cloud', PointCloud, queue_size = 1)
@@ -135,8 +136,8 @@ class PointCloudNode():
             y = -self.Z[i]/1000
 
             # Define grid coordinates: 
-            grid_x = int((x - costmap.info.origin.position.x) / self.resolution)
-            grid_y = int((y - costmap.info.origin.position.y) / self.resolution)
+            grid_x = int((x - costmap.info.origin.position.x) / (self.resolution))
+            grid_y = int((y - costmap.info.origin.position.y) / (self.resolution/np.cos(0.3))) # might be times the cosine of the angle between base_link and camera_link
 
             # Assign occupancy probabilities:
             if 0 <= grid_x < self.width and 0 <= grid_y < self.height:

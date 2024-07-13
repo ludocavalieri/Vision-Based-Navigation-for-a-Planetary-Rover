@@ -43,8 +43,14 @@ class VisualOdometryNode():
         else: 
             print('Unrecognized detector.')
 
+        # Select stereo matcher: 
+        self.stereomatcher = 'BM'
+
         # Initialize stereo matcher for disparity computation:
-        self.stereo = cv.StereoBM.create(numDisparities=16, blockSize=15)
+        if self.stereomatcher == 'BM': 
+            self.stereo = cv.StereoBM.create(numDisparities=5*16, blockSize=13) # TODO: tune parameters
+        elif self.stereomatcher == 'SGBM': 
+            self.stereo = cv.StereoSGBM.create(numDisparities=5*16, blockSize=13, P1=8*3*13**2, P2= 32*3*13**2, mode=cv.STEREO_SGBM_MODE_SGBM_3WAY) # TODO: tune parameters
 
         # Descriptor variables:
         self.kpl1 = None 
@@ -187,7 +193,7 @@ class VisualOdometryNode():
             valid_indices = []
 
             for indices, (u,v) in enumerate(ptsl_1): 
-                # depth:
+                # Depth:
                 z = self.depth[int(v), int(u)]
 
                 # Filter out points that do not fall within the specified depth range:
@@ -215,25 +221,6 @@ class VisualOdometryNode():
             except: 
                 self.R = np.eye(3)
                 self.t = np.zeros((3,1))
-
-    def MotionEstimation2Dto2D(self):
-        if self.matches12 is None:
-            return
-        else: 
-            rospy.loginfo('Estimating motion...')
-
-            # Extract points matched between left 1 and left 2:
-            ptsl_1 = np.float32([self.kpl1[m.queryIdx].pt for m in self.matches12])
-            ptsl_2 = np.float32([self.kpl2[m.trainIdx].pt for m in self.matches12])
-            
-            # Estimate essential matrix and estimate camera pose:
-            try:
-                E = cv.findEssentialMat(ptsl_1, ptsl_2, self.K, method=cv.RANSAC, prob=0.999, threshold=1.0)[0]
-                _, self.R, self.t, _ = cv.recoverPose(E, ptsl_1, ptsl_2, self.K)
-            except: 
-                self.R = np.eye(3)
-                self.t = np.zeros((3,1))
-            print(self.R,self.t)
 
     # Trajectory Reconstruction: 
     def TrajectoryReconstruction(self): 
@@ -274,8 +261,8 @@ class VisualOdometryNode():
             tf2Broadcast = tf2_ros.TransformBroadcaster()
             tf2Stamp = TransformStamped()
             tf2Stamp.header.stamp = rospy.Time.now()
-            tf2Stamp.header.frame_id = 'map'
-            tf2Stamp.child_frame_id = 'rover_custom'
+            tf2Stamp.header.frame_id = 'odom'
+            tf2Stamp.child_frame_id = 'base_footprint'
             tf2Stamp.transform.translation.x = self.x0[0]/1000
             tf2Stamp.transform.translation.y = self.x0[1]/1000
             tf2Stamp.transform.translation.z = self.x0[2]/1000
@@ -335,7 +322,7 @@ class VisualOdometryNode():
         rospy.loginfo("Subscribed to /image_left and /image_right.")
 
         # Main loop:
-        rate = rospy.Rate(0.2)  # 0.2 Hz -> if the frequency is too high, the time step is too small and the disparity computation produces larger errors, if it's too low the trajectory isn't sufficiently smooth (a lot depends on simulated environment, few features -> lower frequency is needed)
+        rate = rospy.Rate(0.5)  # 0.5 Hz -> if the frequency is too high, the time step is too small and the disparity computation produces larger errors, if it's too low the trajectory isn't sufficiently smooth (a lot depends on simulated environment, few features -> lower frequency is needed)
         while not rospy.is_shutdown():
             # Visual odometry procedure:
             self.FeatureDetector()

@@ -57,21 +57,12 @@ class LocalizationTest():
         self.odometry_x.append(msg.pose.position.x+5)
         self.odometry_y.append(msg.pose.position.y+7)
 
-    def ZEDVO_callback(self,msg): 
-        # Update time vector: 
-        t = rospy.Time.now().to_sec()
-        self.timeZEDVO.append(t)
-
-        # ZED VO output
-        self.ZED_odometry_x.append(msg.pose.pose.position.x+5)
-        self.ZED_odometry_y.append(msg.pose.pose.position.y+7)
-
     def ComputeError(self):
         # Interpolate odometry data: 
         odometry_x_int = np.interp(np.array(self.timeGT),np.array(self.timeVO),np.array(self.odometry_x))
         odometry_y_int = np.interp(np.array(self.timeGT),np.array(self.timeVO),np.array(self.odometry_y))
 
-        # Compute errors
+        # Compute errors:
         for i in range(len(odometry_x_int)): 
             er = np.sqrt((self.ground_truth_x[i]-odometry_x_int[i])**2+(self.ground_truth_y[i]-odometry_y_int[i])**2)
             erx = abs(self.ground_truth_x[i]-odometry_x_int[i])
@@ -80,12 +71,25 @@ class LocalizationTest():
             self.errorx.append(erx)
             self.errory.append(ery)
 
+        # Final error: 
+        print("Final error: ", self.error[-1])
+
+        # Length of traverse:
+        traverse = 0
+        for i in range(len(self.timeGT)-1):
+            traverse = traverse + np.sqrt((self.ground_truth_x[i+1]-self.ground_truth_x[i])**2+(self.ground_truth_y[i+1]-self.ground_truth_y[i])**2)
+        print("Length of traverse: ", traverse)
+
+        # Root Mean Square Error:
+        N = len(self.timeGT)
+        RMSE = np.sum(np.array(self.error))/N
+        print("RMSE: ", RMSE)  
+
     def PlotResults(self): 
         # Trajectory comparison:
         fig1 = plt.figure()    
         plt.plot(self.ground_truth_x, self.ground_truth_y, label='Ground Truth',color='red') # Plot the ground truth trajectory  
         plt.plot(self.odometry_x, self.odometry_y, label='Visual Odometry',color='blue') # Plot the trajectory reconstructed with visual odometry - custom
-        plt.plot(self.ZED_odometry_x, self.ZED_odometry_y, label='Visual Odometry ZED',color='green') # Plot the trajectory reconstructed with visual odometry - ZED (baseline)
         plt.xlabel('X position [m]')
         plt.ylabel('Y position [m]')
         plt.title('Trajectory Comparison')
@@ -94,13 +98,15 @@ class LocalizationTest():
 
         # Error plot:
         fig2, (ax1, ax2) = plt.subplots(1, 2)  
-        ax1.plot(self.error, label='Error',color='red') 
+        ax1.plot(self.timeGT, self.error, label='Error',color='red') 
+        ax1.set_xlabel('Time [sec]')
         ax1.set_ylabel('Error [m]')
-        ax1.set_title('Error')
+        ax1.set_title('Trajectory Error')
         ax1.legend()
         ax1.grid(True)
-        ax2.plot(self.errorx, label='Error on x',color='blue') 
-        ax2.plot(self.errory, label='Error on y',color='green')
+        ax2.plot(self.timeGT, self.errorx, label='Error on x',color='blue') 
+        ax2.plot(self.timeGT, self.errory, label='Error on y',color='green')
+        ax2.set_xlabel('Time [sec]')
         ax2.set_ylabel('Error [m]')
         ax2.set_title('Errors on Components')
         ax2.legend()
@@ -113,7 +119,6 @@ class LocalizationTest():
         while not rospy.is_shutdown(): 
             GT_sub = rospy.Subscriber('/ground_truth', Odometry, lambda x: self.GT_callback(x),queue_size=1)
             VO_sub = rospy.Subscriber('/custom_odom', PoseStamped, lambda x: self.VO_callback(x),queue_size=1) 
-            ZEDVO_sub = rospy.Subscriber('/zed2/odom', Odometry, lambda x: self.ZEDVO_callback(x),queue_size=1) 
             rate.sleep()
     
         self.ComputeError()

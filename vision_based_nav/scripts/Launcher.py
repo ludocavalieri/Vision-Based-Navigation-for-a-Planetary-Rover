@@ -83,7 +83,7 @@ class Launcher():
             try:
                 gazpid_list = subprocess.check_output(["pgrep", "-f", "gazebo"])  
                 gazebo_pid = list(map(int, gazpid_list.split()))
-                self.pid_list.extend(gazebo_pid)
+                self.process_dict.extend(gazebo_pid)
             except subprocess.CalledProcessError:
                 rospy.logwarn("WARNING: No sign of gazebo processes")
                 pass
@@ -113,7 +113,7 @@ class Launcher():
     def RunController(self): 
         # Run Controller:
         def run_controller():
-            controller_process = subprocess.run(["rosrun", "vision_based_nav", "RobotController.py"], capture_output=True)
+            controller_process = subprocess.Popen(["rosrun", "vision_based_nav", "RobotController.py"])
             self.process_dict['RunController'] = controller_process
 
         # Start thread:
@@ -123,7 +123,7 @@ class Launcher():
     def RunVO(self):
         # Run VO:
         def run_VO():
-            vo_process = subprocess.run(["rosrun", "vision_based_nav", "VOnode.py"], capture_output=True)
+            vo_process = subprocess.Popen(["rosrun", "vision_based_nav", "VOnode.py"])
             self.process_dict['RunVO'] = vo_process
 
         # Start thread:
@@ -133,7 +133,7 @@ class Launcher():
     def RunLocTest(self):
         # Run localization test:
         def run_loctest():
-            loctest_process = subprocess.run(["rosrun", "vision_based_nav", "LocalizationTest.py"], capture_output=True)
+            loctest_process = subprocess.Popen(["rosrun", "vision_based_nav", "LocalizationTest.py"])
             self.process_dict['RunLocTest'] = loctest_process
 
         # Start thread:
@@ -143,7 +143,7 @@ class Launcher():
     def RunDensePC(self):
         # Run point cloud node:
         def run_PC():
-            pc_process = subprocess.run(["rosrun", "vision_based_nav", "DensePointCloud.py"], capture_output=True)
+            pc_process = subprocess.Popen(["rosrun", "vision_based_nav", "DensePointCloud.py"])
             self.process_dict['RunDensePC'] = pc_process
 
         # Start thread:
