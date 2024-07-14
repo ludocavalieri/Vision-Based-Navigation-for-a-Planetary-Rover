@@ -21,7 +21,7 @@ class Launcher():
         self.root.geometry("700x420")
         self.root.configure(background='grey')
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        image_path = os.path.join(script_dir, "figures/joystick.png")
+        image_path = os.path.join(script_dir, "figures/control panel.png")
         icon_image = tk.PhotoImage(file=image_path)
         self.root.iconphoto(True,icon_image)
 

@@ -5,33 +5,35 @@
   <include file="$(find leo_erc_gazebo)/launch/leo_gazebo.launch"
     pass_all_args="true">
     <arg name="world_name" value="$(find vision_based_nav)/worlds/MartianSurface.world" />
-    <arg name="x" value="5" />
-    <arg name="y" value="7" />
+    <!-- Starting position -->
+    <arg name="x" value="0" />
+    <arg name="y" value="-5" />
     <arg name="z" value="1.5" />
+    <arg name="Y" value="1.8"/>
   </include>
 
   <!-- Launch rviz-->
   <include file="$(find leo_erc_viz)/launch/rviz.launch">
   </include>
 
-  <!-- Launch ground truth filter-->
+  <!-- Launch ground truth filter with correct offset-->
   <node name="ground_truth_filter"
     pkg="leo_erc_gazebo"
     type="ground_truth_filter">
     <param name="x_offset" value="0.0" />
-    <param name="y_offset" value="0.0" />
-    <param name="z_offset" value="0.0" />
+    <param name="y_offset" value="-5" />
+    <param name="z_offset" value="1.5" />
+    <param name="yaw_offset" value="1.8" />
   </node>
 
   <!-- Publish static transform between camera_link and base_link-->
   <arg name="pi/2" value="1.5707963267948966" />
   <arg name="rot" value="1.9999999" />
-  <!--arg name="rot" value="1.78019" /-->
   <arg name="optical_rotate" value="0 0 -0.05 -$(arg pi/2) 0 -$(arg rot)" />
   <node pkg="tf" type="static_transform_publisher" name="camera_base_link"
         args="$(arg optical_rotate) base_link camera_link 100" />
 
-  <!-- Publish static transform between camera_link and rover_custom-->
+  <!-- Publish static transform between camera_link2 and base_link-->
   <arg name="pi" value="3.14159265359" />
   <arg name="optical_rotate2" value="0 0 -0.05 -$(arg pi/2) 0 -$(arg pi)" />
   <node pkg="tf" type="static_transform_publisher" name="camera_base_link2"

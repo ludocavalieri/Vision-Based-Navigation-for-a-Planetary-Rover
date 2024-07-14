@@ -7,6 +7,7 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseStamped
 import tf2_ros
 import tf2_geometry_msgs
+import message_filters
 
 # Define dead_reckoning node:
 class LocalizationTest():
@@ -17,12 +18,12 @@ class LocalizationTest():
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
         # Initialize state variables:
-        self.ground_truth_x = [5]
-        self.ground_truth_y = [7]
-        self.odometry_x = [5]
-        self.odometry_y = [7]
-        self.ZED_odometry_x = [5]
-        self.ZED_odometry_y = [7]
+        self.ground_truth_x = [0] 
+        self.ground_truth_y = [0]
+        self.odometry_x = [0]
+        self.odometry_y = [0]
+        self.odometry_x_int = None
+        self.odometry_y_int = None
 
         # Initialize time vectors
         t0 = rospy.Time.now().to_sec()
@@ -35,38 +36,36 @@ class LocalizationTest():
         self.errorx = []
         self.errory = []
 
-    def GT_callback(self,msg): 
+    def OdomCallback(self,msgGT,msgVO):
         # Update time vector: 
         t = rospy.Time.now().to_sec()
         self.timeGT.append(t)
 
         # GT output
-        self.ground_truth_x.append(msg.pose.pose.position.x)
-        self.ground_truth_y.append(msg.pose.pose.position.y)
+        self.ground_truth_x.append(msgGT.pose.pose.position.x)
+        self.ground_truth_y.append(msgGT.pose.pose.position.y)
 
-    def VO_callback(self,msg): 
         # Update time vector: 
-        t = rospy.Time.now().to_sec()
         self.timeVO.append(t)
 
         # Transform vector: 
-        transform = self.tf_buffer.lookup_transform("base_link", msg.header.frame_id, msg.header.stamp, rospy.Duration(1.0))
-        msg = tf2_geometry_msgs.do_transform_pose(msg, transform)
+        transform = self.tf_buffer.lookup_transform("base_link", msgVO.header.frame_id, msgVO.header.stamp, rospy.Duration(1.0))
+        msgVO = tf2_geometry_msgs.do_transform_pose(msgVO, transform)
 
         # VO output
-        self.odometry_x.append(msg.pose.position.x+5)
-        self.odometry_y.append(msg.pose.position.y+7)
+        self.odometry_x.append(msgVO.pose.position.x)
+        self.odometry_y.append(msgVO.pose.position.y)
 
     def ComputeError(self):
         # Interpolate odometry data: 
-        odometry_x_int = np.interp(np.array(self.timeGT),np.array(self.timeVO),np.array(self.odometry_x))
-        odometry_y_int = np.interp(np.array(self.timeGT),np.array(self.timeVO),np.array(self.odometry_y))
+        self.odometry_x_int = np.interp(np.array(self.timeGT),np.array(self.timeVO),np.array(self.odometry_x))
+        self.odometry_y_int = np.interp(np.array(self.timeGT),np.array(self.timeVO),np.array(self.odometry_y))
 
         # Compute errors:
-        for i in range(len(odometry_x_int)): 
-            er = np.sqrt((self.ground_truth_x[i]-odometry_x_int[i])**2+(self.ground_truth_y[i]-odometry_y_int[i])**2)
-            erx = abs(self.ground_truth_x[i]-odometry_x_int[i])
-            ery = abs(self.ground_truth_y[i]-odometry_y_int[i])
+        for i in range(len(self.odometry_x_int)): 
+            er = np.sqrt((self.ground_truth_x[i]-self.odometry_x_int[i])**2+(self.ground_truth_y[i]-self.odometry_y_int[i])**2)
+            erx = abs(self.ground_truth_x[i]-self.odometry_x_int[i])
+            ery = abs(self.ground_truth_y[i]-self.odometry_y_int[i])
             self.error.append(er)  
             self.errorx.append(erx)
             self.errory.append(ery)
@@ -82,7 +81,10 @@ class LocalizationTest():
 
         # Root Mean Square Error:
         N = len(self.timeGT)
-        RMSE = np.sum(np.array(self.error))/N
+        RMSE = 0
+        for i in range(N-1):
+            RMSE = RMSE + self.error[i]**2
+        RMSE = np.sqrt(RMSE/N)
         print("RMSE: ", RMSE)  
 
     def PlotResults(self): 
@@ -117,8 +119,14 @@ class LocalizationTest():
     def run(self): 
         rate = rospy.Rate(1) # [Hz]
         while not rospy.is_shutdown(): 
-            GT_sub = rospy.Subscriber('/ground_truth', Odometry, lambda x: self.GT_callback(x),queue_size=1)
-            VO_sub = rospy.Subscriber('/custom_odom', PoseStamped, lambda x: self.VO_callback(x),queue_size=1) 
+            # Create subscribers:
+            GT_sub = message_filters.Subscriber('/ground_truth', Odometry)
+            VO_sub = message_filters.Subscriber('/custom_odom', PoseStamped)
+
+            # Synchronize messages:
+            ts = message_filters.ApproximateTimeSynchronizer([GT_sub, VO_sub], 10, 0.1)
+            ts.registerCallback(lambda msgGT, msgVO: self.OdomCallback(msgGT, msgVO))
+            
             rate.sleep()
     
         self.ComputeError()
