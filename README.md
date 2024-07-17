@@ -19,17 +19,17 @@ The ultimate output of the pipeline will be a medium-to-close range obstacle map
 ## Visual odometry in simulated environment
 
 ### Start the simulation
-The simulation environment is specified in [model.sdf](models/mars_like_environment/model.sdf), where it is possible to select *katwijck simulated.dae* amd *model.dae*. The former is a basic reproduction of the Katwijck beach portion in which the real dataset is acquired, while the latter is a slightly more complex and realistic reproduction of a planetary terrain. The node [RobotController.py](scripts/RobotController.py) enables sending */cmd_vel* messages to the rover using the 
+The simulation environment is specified in [model.sdf](vision_based_nav/models/mars_like_environment/model.sdf), where it is possible to select *katwijck simulated.dae* amd *model.dae*. The former is a basic reproduction of the Katwijck beach portion in which the real dataset is acquired, while the latter is a slightly more complex and realistic reproduction of a planetary terrain. The node [RobotController.py](vision_based_nav/scripts/RobotController.py) enables sending */cmd_vel* messages to the rover using the 
 To launch the simulation environment (both Gazebo and Rviz), run the following commands from terminal: 
 '''
 roslaunch vision_based_nav gazebo_model.launch 
 rosrun vision_based_nav RobotController.py
 '''
->[!WARNING]
+>[!NOTE]
 >To maintain the controller active, click on the GUI.
 
 ### Perform visual odometry and evaluate its performance 
-The Visual Odometry procedure is implemented in [VOnode.py](scripts/VOnode.py). To test the pipeline's performance, run [LocalizationTest.py](scripts/LocalizationTest.py), which returns a plot of the ground truth and reconstructed trajectories, a plot of the trajectory and orientation errors, and the values of the following metrics: RMSE, RMSE relative to path length, mean orientation error relative to path length. 
+The Visual Odometry procedure is implemented in [VOnode.py](svision_based_nav/cripts/VOnode.py). To test the pipeline's performance, run [LocalizationTest.py](vision_based_nav/scripts/LocalizationTest.py), which returns a plot of the ground truth and reconstructed trajectories, a plot of the trajectory and orientation errors, and the values of the following metrics: RMSE, RMSE relative to path length, mean orientation error relative to path length. 
 To run the odometry node and evaluate its performance, run the following commands from terminal: 
 '''
 rosrun vision_based_nav VOnode.py
@@ -37,7 +37,7 @@ rosrun vision_based_nav LocalizationTest.py
 '''
 
 >[!CAUTION]
->The simulation exploits the leo rover model. To download the leo rover repository head to [ERC Leo rover repository](https://github.com/EuropeanRoverChallenge/ERC-Remote-Navigation-Sim).
+>The simulation exploits the LEO rover model, which is included in the [ERC Leo rover repository](https://github.com/EuropeanRoverChallenge/ERC-Remote-Navigation-Sim). Clone this repository to download all the files needed to use the model. 
 
 # Authors 
 
