@@ -29,7 +29,7 @@ rosrun vision_based_nav RobotController.py
 >To maintain the controller active, click on the GUI.
 
 ### Perform visual odometry and evaluate its performance 
-The Visual Odometry procedure is implemented in [VOnode.py](svision_based_nav/cripts/VOnode.py). To test the pipeline's performance, run [LocalizationTest.py](vision_based_nav/scripts/LocalizationTest.py), which returns a plot of the ground truth and reconstructed trajectories, a plot of the trajectory and orientation errors, and the values of the following metrics: RMSE, RMSE relative to path length, mean orientation error relative to path length. 
+The Visual Odometry procedure is implemented in [VOnode.py](vision_based_nav/scripts/VOnode.py). To test the pipeline's performance, run [LocalizationTest.py](vision_based_nav/scripts/LocalizationTest.py), which returns a plot of the ground truth and reconstructed trajectories, a plot of the trajectory and orientation errors, and the values of the following metrics: RMSE, RMSE relative to path length, mean orientation error relative to path length. 
 To run the odometry node and evaluate its performance, run the following commands from terminal: 
 '''
 rosrun vision_based_nav VOnode.py
