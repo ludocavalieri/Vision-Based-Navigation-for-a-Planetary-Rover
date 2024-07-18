@@ -62,7 +62,7 @@ rosrun vision_based_nav RobotController.py
 >To maintain the controller active, click on the GUI.
 
 ![Gazebo world.](<vision_based_nav/figures/Gazebo.png>) 
-![RViz visualization](<vision_based_nav/figures/RViz.png>)
+![RViz visualization.](<vision_based_nav/figures/RViz.png>)
 
 ### Perform visual odometry and evaluate its performance 
 The Visual Odometry procedure is implemented in [VOnode.py](vision_based_nav/scripts/VOnode.py), which subscribes to the image topics on which the ZED 2i stereo camera mounted on the model publishes the acquired images. It then publishes the retrieved pose as a PoseStamped message and the transform between the world  frame and the rover frame as a tf. 
@@ -87,8 +87,6 @@ rosrun vision_based_nav VOnode.py
 We report some examples of reconstructed trajectories obtained with the provided codes.
 
 ## Results on Katwijk dataset
-
-![Position and orientation errors.](<vision_based_nav/figures/Katwijk errors.jpg>)
 
 ## Results in simulated environment
 
