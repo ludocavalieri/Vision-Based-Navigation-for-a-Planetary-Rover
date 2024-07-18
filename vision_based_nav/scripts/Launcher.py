@@ -3,13 +3,10 @@
 import subprocess
 import tkinter as tk
 import os
-import signal
-from tkinter import Radiobutton
 import time
 import rospy
 import threading
 from tkinter import messagebox
-from std_msgs.msg import String
 import rospy
 
 # Create launcher class:

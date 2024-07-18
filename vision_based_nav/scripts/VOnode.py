@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import PoseStamped, TransformStamped
+import message_filters
 import tf2_ros
 import tf
 import cv2 as cv
@@ -28,29 +29,49 @@ class VisualOdometryNode():
         self.grayl2 = None
 
         # Select detector: 
-        self.detector = 'orb' # options: Harris, SIFT, SURF, ORB
+        self.detector = 'brisk' # options: Harris, SIFT, SURF, ORB, FAST, BRISK
 
         # Create descriptor and matcher:
         if self.detector == 'sift' or self.detector == 'harris': 
             self.det = cv.SIFT_create()
-            self.BF = cv.BFMatcher(cv.NORM_L2)
-        elif self.detector == 'surf': 
-            self.det = cv.xfeatures2d.SURF_create()
-            self.BF = cv.BFMatcher(cv.NORM_L2)
+            self.BF = cv.BFMatcher(cv.NORM_L2, crossCheck=False)
         elif self.detector == 'orb': 
             self.det = cv.ORB_create()
-            self.BF = cv.BFMatcher(cv.NORM_HAMMING2)
+            self.BF = cv.BFMatcher(cv.NORM_HAMMING2, crossCheck=False)
+        elif self.detector == 'fast': 
+            self.det = cv.FastFeatureDetector_create(threshold=25, nonmaxSuppression=True)
+            self.descr = cv.SIFT_create()
+            self.BF = cv.BFMatcher(cv.NORM_L2, crossCheck=False)
+        elif self.detector == 'brisk':
+            self.det = cv.BRISK_create()
+            self.BF = cv.BFMatcher(cv.NORM_HAMMING2, crossCheck=False)
         else: 
             print('Unrecognized detector.')
 
         # Select stereo matcher: 
-        self.stereomatcher = 'BM'
+        self.stereomatcher = 'SGBM'
 
         # Initialize stereo matcher for disparity computation:
         if self.stereomatcher == 'BM': 
-            self.stereo = cv.StereoBM.create(numDisparities=5*16, blockSize=13) # TODO: tune parameters
-        elif self.stereomatcher == 'SGBM': 
-            self.stereo = cv.StereoSGBM.create(numDisparities=5*16, blockSize=13, P1=8*3*13**2, P2= 32*3*13**2, mode=cv.STEREO_SGBM_MODE_SGBM_3WAY) # TODO: tune parameters
+            if self.detector == 'sift': 
+                self.stereo = cv.StereoBM.create(numDisparities=3*16, blockSize=11) 
+            if self.detector == 'orb': 
+                self.stereo = cv.StereoBM.create(numDisparities=5*16, blockSize=5) 
+            if self.detector == 'fast': 
+                self.stereo = cv.StereoBM.create(numDisparities=5*16, blockSize=5) 
+            if self.detector == 'brisk': 
+                self.stereo = cv.StereoBM.create(numDisparities=4*16, blockSize=7) 
+        elif self.stereomatcher == 'SGBM':
+            if self.detector == 'sift': 
+                self.stereo = cv.StereoSGBM.create(numDisparities=3*16, blockSize=11, P1=8*3*11**2, P2= 32*3*11**2, mode=cv.STEREO_SGBM_MODE_SGBM_3WAY) 
+            if self.detector == 'orb': 
+                self.stereo = cv.StereoSGBM.create(numDisparities=5*16, blockSize=7, P1=8*3*7**2, P2= 32*3*7**2, mode=cv.STEREO_SGBM_MODE_SGBM_3WAY) 
+            if self.detector == 'fast': 
+                self.stereo = cv.StereoSGBM.create(numDisparities=5*16, blockSize=7, P1=8*3*7**2, P2= 32*3*7**2, mode=cv.STEREO_SGBM_MODE_SGBM_3WAY) 
+            if self.detector == 'brisk': 
+                self.stereo = cv.StereoSGBM.create(numDisparities=3*16, blockSize=7, P1=8*3*7**2, P2= 32*3*7**2, mode=cv.STEREO_SGBM_MODE_SGBM_3WAY) 
+        else: 
+            print('Unrecognized matcher')
 
         # Descriptor variables:
         self.kpl1 = None 
@@ -88,15 +109,15 @@ class VisualOdometryNode():
 
         # Odometry publisher: 
         self.PosePub = rospy.Publisher("/custom_odom", PoseStamped, queue_size=1)
-    
-    # Create listener callbacks: 
-    def LeftCallback(self,msg):
-        rospy.loginfo('Message received from camera left.')
-        self.left2 = bridge.imgmsg_to_cv2(msg, "rgb8")
 
-    def RightCallback(self,msg):
-        rospy.loginfo('Message received from camera right.')
-        self.right2 = bridge.imgmsg_to_cv2(msg, "rgb8")
+        # Iteration duration vector:
+        self.timevector = []        
+    
+    # Create listener callback: 
+    def StereoPairCallback(self, left, right):
+        rospy.loginfo('Messages received from camera left and camera right.')
+        self.left2 = bridge.imgmsg_to_cv2(left, "rgb8")
+        self.right2 = bridge.imgmsg_to_cv2(right, "rgb8")
 
     # Feature detection: 
     def FeatureDetector(self): 
@@ -130,7 +151,17 @@ class VisualOdometryNode():
                 self.kpl1, self.desl1 = self.det.compute(self.grayl1, self.kpl1)
                 self.kpr1, self.desr1 = self.det.compute(self.grayr1, self.kpr1)
                 self.kpl2, self.desl2 = self.det.compute(self.grayl2, self.kpl2)
-            elif self.detector == 'sift' or self.detector == 'surf' or self.detector == 'orb':
+            elif self.detector == 'fast': 
+                # Detect keypoints with FAST: 
+                self.kpl1 = self.det.detect(self.grayl1, None)
+                self.kpr1 = self.det.detect(self.grayr1, None)
+                self.kpl2 = self.det.detect(self.grayl2, None)
+
+                # Compute SIFT descriptor:
+                self.kpl1, self.desl1 = self.descr.compute(self.grayl1, self.kpl1)
+                self.kpr1, self.desr1 = self.descr.compute(self.grayr1, self.kpr1)
+                self.kpl2, self.desl2 = self.descr.compute(self.grayl2, self.kpl2)
+            elif self.detector == 'sift' or self.detector == 'orb' or self.detector == 'brisk':
                 # Use SIFT/SURF/ORB to detect and describe features:
                 self.kpl1, self.desl1 = self.det.detectAndCompute(self.grayl1, None)
                 self.kpl2, self.desl2 = self.det.detectAndCompute(self.grayl2, None)
@@ -177,7 +208,10 @@ class VisualOdometryNode():
             rospy.loginfo('Estimating motion...')  
 
             # Disparity and depth: 
-            disparity = self.stereo.compute(self.grayl1,self.grayr1)/16
+            if self.stereomatcher == 'SGBM':
+                disparity = self.stereo.compute(self.left1,self.right1)/16
+            else: 
+                disparity = self.stereo.compute(self.grayl1,self.grayr1)/16
             disparity[disparity <= 0.0] = 0.1
             self.disparity = disparity
             self.depth = self.B*self.f/disparity
@@ -291,14 +325,12 @@ class VisualOdometryNode():
         if self.disparity is not None:
             plt.figure()
             plt.imshow(self.disparity,'jet')
-            plt.colorbar()
             plt.title('Disparity Map')
 
         # Plot depth:
         if self.depth is not None:
             plt.figure()
             plt.imshow(self.depth,'jet')
-            plt.colorbar()
             plt.title('Depth Map')
 
         # Plot Trajectory: 
@@ -317,18 +349,26 @@ class VisualOdometryNode():
     # Node main code:
     def run(self):    
         # Subscribe to desired topics: 
-        rospy.Subscriber("/zed2/left/image_rect_color", Image, self.LeftCallback, queue_size=1)
-        rospy.Subscriber("/zed2/right/image_rect_color", Image, self.RightCallback, queue_size=1)
+        left_sub = message_filters.Subscriber('/zed2/left/image_rect_color', Image)
+        right_sub = message_filters.Subscriber('/zed2/right/image_rect_color', Image)
+
+        # Synchronize messages:
+        ts = message_filters.ApproximateTimeSynchronizer([left_sub, right_sub], 10, 0.1)
+        ts.registerCallback(lambda left, right: self.StereoPairCallback(left, right))
+            
         rospy.loginfo("Subscribed to /image_left and /image_right.")
 
         # Main loop:
-        rate = rospy.Rate(0.5)  # 0.5 Hz -> if the frequency is too high, the time step is too small and the disparity computation produces larger errors, if it's too low the trajectory isn't sufficiently smooth (a lot depends on simulated environment, few features -> lower frequency is needed)
+        rate = rospy.Rate(0.5)  # can be changed, 1 Hz and 2 Hz are also feasible, higher frequencies may result in inaccurate results
         while not rospy.is_shutdown():
             # Visual odometry procedure:
+            t0 = rospy.Time.now().to_sec()
             self.FeatureDetector()
             self.MatchingFunction()
             self.MotionEstimation3Dto2D()
             self.TrajectoryReconstruction()
+            tf = rospy.Time.now().to_sec()
+            self.timevector.append(tf-t0)
 
             # Update image at t0: 
             self.left1 = self.left2
@@ -337,7 +377,7 @@ class VisualOdometryNode():
             # Repeat:
             rate.sleep()
         
-        self.PlotResults() # bag
+        # self.PlotResults() # bag
 
 # Run dead reckoning node: 
 if __name__ == '__main__':
@@ -346,5 +386,6 @@ if __name__ == '__main__':
         node.run()
     except rospy.ROSInterruptException:
         # Plot results: 
-        node.PlotResults() # simulation
+        print(f'Average iteration time: {np.mean(node.timevector)} s')
+        # node.PlotResults() # simulation
         pass

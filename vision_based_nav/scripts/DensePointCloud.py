@@ -3,11 +3,11 @@
 import rospy
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.cluster import DBSCAN
 from sensor_msgs.msg import Image, PointCloud
 from geometry_msgs.msg import Point32
 from std_msgs.msg import Header
 from nav_msgs.msg import OccupancyGrid, MapMetaData
+import message_filters
 import cv2 as cv
 from cv_bridge import CvBridge
 bridge = CvBridge()
@@ -50,14 +50,11 @@ class PointCloudNode():
         self.PointCloudPub = rospy.Publisher('dense_point_cloud', PointCloud, queue_size = 1)
         self.CostmapPub = rospy.Publisher('costmap_custom', OccupancyGrid, queue_size=1)
 
-    # Create listener callbacks: 
-    def LeftCallback(self,msg):
-        rospy.loginfo('Message received from camera left.')
-        self.left = bridge.imgmsg_to_cv2(msg, "rgb8")
-
-    def RightCallback(self,msg):
-        rospy.loginfo('Message received from camera right.')
-        self.right = bridge.imgmsg_to_cv2(msg, "rgb8")
+    # Create listener callback: 
+    def StereoPairCallback(self, left, right):
+        # rospy.loginfo('Messages received from camera left and camera right.')
+        self.left2 = bridge.imgmsg_to_cv2(left, "rgb8")
+        self.right2 = bridge.imgmsg_to_cv2(right, "rgb8")
 
     # 3D reconstruction: 
     def Reconstruction3D(self):
@@ -152,14 +149,12 @@ class PointCloudNode():
         # Plot disparity:
         if self.disparity is not None:
             plt.figure()
-            plt.imshow(self.disparity,'jet')
-            plt.colorbar()
+            plt.imshow(self.disparity,'turbo')
             plt.title('Disparity Map')
 
         if self.depth is not None:
             plt.figure()
-            plt.imshow(self.depth,'jet')
-            plt.colorbar()
+            plt.imshow(self.depth,'flag')
             plt.title('Depth Map')
         
         # Show plots:
@@ -168,8 +163,13 @@ class PointCloudNode():
     # Node main code:
     def run(self):    
         # Subscribe to desired topics: 
-        rospy.Subscriber("/zed2/left/image_rect_color", Image, self.LeftCallback, queue_size=1)
-        rospy.Subscriber("/zed2/right/image_rect_color", Image, self.RightCallback, queue_size=1)
+        left_sub = message_filters.Subscriber('/zed2/left/image_rect_color', Image)
+        right_sub = message_filters.Subscriber('/zed2/right/image_rect_color', Image)
+
+        # Synchronize messages:
+        ts = message_filters.ApproximateTimeSynchronizer([left_sub, right_sub], 10, 0.1)
+        ts.registerCallback(lambda left, right: self.StereoPairCallback(left, right))
+            
         rospy.loginfo("Subscribed to /image_left and /image_right.")
 
         # Main loop:
