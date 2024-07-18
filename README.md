@@ -39,7 +39,7 @@ Mean absolute orientation error along the whole trajectory divided by the total 
 
 # Running the code
 
-## Visual odometry with Katwijck dataset
+## Visual odometry with Katwijk dataset
 
 ## Dataset 
 For testing of the the 'Real Environment' performances the 'Katwijk beach planetary rover dataset' was used. The dataset was collected on the Katwijk beach in Netherlands near the ESA-ESTEC site. The objective was to create a reference dataset for development and testing of future ESA's Mars Exploration ROvers capabilities in an analog terrain. For this reason, several artificial boulders were placed in order to reproduce the measured rock density correspondent to the deputy landing site of ExoMars missions. Morover the Heavy Duty Planetary Rover (HDPR) was used to collect data since it represents a good model of the ExoMars rovers. It is a rocker-bogie-style rover with multiple sensors (LocCam, PAnCam, LiDAR, ToF camera). The data used in this work where the 1024x768 RGB images from the PointGrey Bumblebee2 stereocamera and the GPS RTK collected data inUTM-31 frame, to reconstruct the ground truth.
@@ -50,7 +50,7 @@ The pipeline was implemented in Google Colab and its available in the notebook '
 ## Visual odometry in simulated environment
 
 ### Start the simulation
-The simulation environment is specified in [model.sdf](vision_based_nav/models/mars_like_environment/model.sdf), where it is possible to select *katwijck simulated.dae* amd *model.dae*. The former is a basic reproduction of the Katwijck beach portion in which the real dataset is acquired, while the latter is a slightly more complex and realistic reproduction of a planetary terrain. The node [RobotController.py](vision_based_nav/scripts/RobotController.py) enables sending */cmd_vel* messages to the LEO rover model using the arrow keys.
+The simulation environment is specified in [model.sdf](vision_based_nav/models/mars_like_environment/model.sdf), where it is possible to select *katwijk simulated.dae* amd *model.dae*. The former is a basic reproduction of the Katwijk beach portion in which the real dataset is acquired, while the latter is a slightly more complex and realistic reproduction of a planetary terrain. The node [RobotController.py](vision_based_nav/scripts/RobotController.py) enables sending */cmd_vel* messages to the LEO rover model using the arrow keys.
 To launch the simulation environment (both Gazebo and Rviz), run the following commands from terminal: 
 ~~~
 roslaunch vision_based_nav gazebo_model.launch 
@@ -58,6 +58,9 @@ rosrun vision_based_nav RobotController.py
 ~~~
 >[!NOTE]
 >To maintain the controller active, click on the GUI.
+
+![Gazebo world.](<Gazebo.png>) 
+![RViz visualization](<RViz.png>)
 
 ### Perform visual odometry and evaluate its performance 
 The Visual Odometry procedure is implemented in [VOnode.py](vision_based_nav/scripts/VOnode.py), which subscribes to the image topics on which the ZED 2i stereo camera mounted on the model publishes the acquired images. It then publishes the retrieved pose as a PoseStamped message and the transform between the world  frame and the rover frame as a tf. 
@@ -70,6 +73,23 @@ rosrun vision_based_nav LocalizationTest.py
 
 >[!CAUTION]
 >The simulation exploits the LEO rover model, which is included in the [ERC Leo rover repository](https://github.com/EuropeanRoverChallenge/ERC-Remote-Navigation-Sim). Clone this repository to download all the files needed to use the model. 
+
+### Launcher 
+for simplicity, all these commands can also be executed thanks to [Launcher.py](vision_based_nav/scripts/Launcher.py), a simple GUI which enables starting the simulation, running [VOnode.py](vision_based_nav/scripts/VOnode.py), running [LocalizationTest.py](vision_based_nav/scripts/LocalizationTest.py), as well as [DensePointCloud.py](vision_based_nav/scripts/DensePointCloud.py), which simply publishes a dense PointCloud message which can be used for mapping applications. A rudimental 2D projection is also implemented which can serve as foundation for future implementation of a geometrically-derived costmap.
+To launch the GUI, run the following command from terminal (which should be sourced):  
+~~~
+rosrun vision_based_nav VOnode.py
+~~~
+
+# Expected Results
+We report some examples of reconstructed trajectories obtained with the provided codes.
+
+## Results on Katwijk dataset
+
+## Results in simulated environment
+
+![Position and orientation errors.](<BRISK SGBM error.png>) 
+![Reconstructed trajectory.](<BRISK SGBM Trajectory.png>)
 
 # Authors 
 
