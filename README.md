@@ -47,6 +47,8 @@ For testing of the the 'Real Environment' performances the 'Katwijk beach planet
 ### Perform visual odometry and evaluate its performance 
 The pipeline was implemented in Google Colab and its available in the notebook 'KatwijkVO' available in the repository. To run the code it is necessary to have the Transverse 3 - Part 1 dataset downloaded on Google Drive and mount the drive, then setup the correct path to the folder containing the dataset. The first set of cells implements the pipeline functions and briefly comments hw they work. The second parth of the notebook shows of the test of the 8 combinations of the different descriptor and matcher and their respective performances.
 
+![Katwijk rover specifications.](<vision_based_nav/figures/Katwijk rover.png>)
+
 ## Visual odometry in simulated environment
 
 ### Start the simulation
@@ -85,6 +87,8 @@ rosrun vision_based_nav VOnode.py
 We report some examples of reconstructed trajectories obtained with the provided codes.
 
 ## Results on Katwijk dataset
+
+![Position and orientation errors.](<vision_based_nav/figures/Katwijk errors.jpg>)
 
 ## Results in simulated environment
 
