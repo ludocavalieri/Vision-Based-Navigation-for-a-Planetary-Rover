@@ -12,6 +12,7 @@ Different feature detectors and descriptors will be used, namely:
 - FAST + SIFT;
 - ORB;
 - BRISK.
+
 Different stereo matching techniques will be compared, specifically: 
 - Block Matching;
 - Semi-global Block Matching.
