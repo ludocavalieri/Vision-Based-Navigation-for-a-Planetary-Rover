@@ -29,7 +29,7 @@ class VisualOdometryNode():
         self.grayl2 = None
 
         # Select detector: 
-        self.detector = 'brisk' # options: Harris, SIFT, SURF, ORB, FAST, BRISK
+        self.detector = 'fast' # options: Harris, SIFT, SURF, ORB, FAST, BRISK
 
         # Create descriptor and matcher:
         if self.detector == 'sift' or self.detector == 'harris': 
@@ -49,7 +49,7 @@ class VisualOdometryNode():
             print('Unrecognized detector.')
 
         # Select stereo matcher: 
-        self.stereomatcher = 'SGBM'
+        self.stereomatcher = 'BM'
 
         # Initialize stereo matcher for disparity computation:
         if self.stereomatcher == 'BM': 
