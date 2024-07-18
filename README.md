@@ -6,20 +6,50 @@ This repository, articulated in two branches, contains the Colab notebook and RO
 
 Communication and computing performances of planetary rovers limit their autonomous traverse distances. Moreover, for missions to Mars, manual driving is unfeasible: not only does the round trip communication time between Earth and Mars takes from 5 to 20 minutes, but contact with ground can be reached only twice per Sol. Even with the help of orbital data, planning long traverses, and avoiding all local obstacles the rover may encounter on its path, proves to be nearly an impossible task. Such rovers are expensive and out of reach for physical help, and therefore, any collision critically endangers the mission's success. Neverthless, considering future missions' programs, there is the necessity for a high degree of autonomy of these robotic assets.
 
-This work aims to develop an algorithm for autonomous localization and mapping of a planetary rover employing the images provided by a stereocamera. The focus of the study will be on the computer vision techniques that are able to provide useful information for the navigation task, but the particular topic of the rover guidance will not be tackled. In the context of our specific application, great attention will be given to the efficiency of the proposed algorithm and its ability to run in real time.
+This work aims to implement and test a complete Stereo Visual Odometry (SVO) pipeline with 3D-to-2D motion estimation for the navigation of a planetary rover. 
+Different feature detectors and descriptors will be used, namely: 
+- SIFT;
+- FAST + SIFT;
+- ORB;
+- BRISK.
+Different stereo matching techniques will be compared, specifically: 
+- Block Matching;
+- Semi-global Block Matching.
 
-In particular, the rover trajectory and pose will be reconstructed using Visual Odometry. Then, an obstacle detection algorithm will be employed to identify and locate possible hazardous objects in the rover frame. In this context, different O.D. techniques will be surveyed in order to test their performances. 
+Beside evaluating the difference configurations performance, the focus of this work is to compare and analyze the proposed navigation strategy's performance in both a Real and Synthetic environment. The *Real* environment is represented by the "Katwijk Beach Planetary Rover Dataset', provided by ESA and available at [Katwijk Beach Planetary Rover Dataset](https://robotics.estec.esa.int/datasets/katwijk-beach-11-2015/). The *Synthetic* environment is a custom-made Gazebo world, reproducing a Mars-like environment. A second custom-made world, quite similar to the Katwijk beach scenario, is also provided, however it is less accurate than the other. The simulations in the synthetic environment were performed through the Robot Operating System (ROS).
 
-The ultimate output of the pipeline will be a medium-to-close range obstacle map reconstructed entirely from stereo camera data. The overall performances will be evaluated comparing the ground truth trajectory and obstacle map with the reconstructed ones.
+This research was inspired by the fact that, given the lack of stereo-VO datasets acquired in a planetary analog environment, maby studies pertaining to this research field rely solely on simulation environments. However, to the authors' knowledge, there are no studies that directly address the problem of performance transferability from the synthetic environment to the real-world deployment of the application.
+
+# Evaluation Metrics
+
+To evaluate the VO-pipeline performances and compare them between the 'Real' and 'Synthetic' environments, the [official KITTI leaderboard performance metrics](https://www.cvlibs.net/datasets/kitti/eval_odometry.php) were adopted:
+
+**Geometric distance history (m):**
+point by point euclidean distance between the corresponding ground truth and estimated trajectory points
+
+**Angular difference history (deg):**
+point by point absolute difference between ground truth orientation and estimated orientation
+
+**Root Mean Square Error (RMSE) relative to path length (%):**
+RMSE for the whole trajectory divided by the total path length
+
+**Mean angular difference relative to path length (deg/m):**
+Mean absolute orientation error along the whole trajectory divided by the total path length
 
 # Running the code
 
 ## Visual odometry with Katwijck dataset
 
+## Dataset 
+For testing of the the 'Real Environment' performances the 'Katwijk beach planetary rover dataset' was used. The dataset was collected on the Katwijk beach in Netherlands near the ESA-ESTEC site. The objective was to create a reference dataset for development and testing of future ESA's Mars Exploration ROvers capabilities in an analog terrain. For this reason, several artificial boulders were placed in order to reproduce the measured rock density correspondent to the deputy landing site of ExoMars missions. Morover the Heavy Duty Planetary Rover (HDPR) was used to collect data since it represents a good model of the ExoMars rovers. It is a rocker-bogie-style rover with multiple sensors (LocCam, PAnCam, LiDAR, ToF camera). The data used in this work where the 1024x768 RGB images from the PointGrey Bumblebee2 stereocamera and the GPS RTK collected data inUTM-31 frame, to reconstruct the ground truth.
+
+### Perform visual odometry and evaluate its performance 
+The pipeline was implemented in Google Colab and its available in the notebook 'KatwijkVO' available in the repository. To run the code it is necessary to have the Transverse 3 - Part 1 dataset downloaded on Google Drive and mount the drive, then setup the correct path to the folder containing the dataset. The first set of cells implements the pipeline functions and briefly comments hw they work. The second parth of the notebook shows of the test of the 8 combinations of the different descriptor and matcher and their respective performances.
+
 ## Visual odometry in simulated environment
 
 ### Start the simulation
-The simulation environment is specified in [model.sdf](vision_based_nav/models/mars_like_environment/model.sdf), where it is possible to select *katwijck simulated.dae* amd *model.dae*. The former is a basic reproduction of the Katwijck beach portion in which the real dataset is acquired, while the latter is a slightly more complex and realistic reproduction of a planetary terrain. The node [RobotController.py](vision_based_nav/scripts/RobotController.py) enables sending */cmd_vel* messages to the rover using the 
+The simulation environment is specified in [model.sdf](vision_based_nav/models/mars_like_environment/model.sdf), where it is possible to select *katwijck simulated.dae* amd *model.dae*. The former is a basic reproduction of the Katwijck beach portion in which the real dataset is acquired, while the latter is a slightly more complex and realistic reproduction of a planetary terrain. The node [RobotController.py](vision_based_nav/scripts/RobotController.py) enables sending */cmd_vel* messages to the LEO rover model using the arrow keys.
 To launch the simulation environment (both Gazebo and Rviz), run the following commands from terminal: 
 ~~~
 roslaunch vision_based_nav gazebo_model.launch 
@@ -29,7 +59,8 @@ rosrun vision_based_nav RobotController.py
 >To maintain the controller active, click on the GUI.
 
 ### Perform visual odometry and evaluate its performance 
-The Visual Odometry procedure is implemented in [VOnode.py](vision_based_nav/scripts/VOnode.py). To test the pipeline's performance, run [LocalizationTest.py](vision_based_nav/scripts/LocalizationTest.py), which returns a plot of the ground truth and reconstructed trajectories, a plot of the trajectory and orientation errors, and the values of the following metrics: RMSE, RMSE relative to path length, mean orientation error relative to path length. 
+The Visual Odometry procedure is implemented in [VOnode.py](vision_based_nav/scripts/VOnode.py), which subscribes to the image topics on which the ZED 2i stereo camera mounted on the model publishes the acquired images. It then publishes the retrieved pose as a PoseStamped message and the transform between the world  frame and the rover frame as a tf. 
+To test the pipeline's performance, run [LocalizationTest.py](vision_based_nav/scripts/LocalizationTest.py), which returns a plot of the ground truth and reconstructed trajectories, a plot of the trajectory and orientation errors, and the values of the follwing performance metrics: RMSE, RMSE relative to path length, mean orientation error relative to path length. 
 To run the odometry node and evaluate its performance, run the following commands from terminal: 
 ~~~
 rosrun vision_based_nav VOnode.py
