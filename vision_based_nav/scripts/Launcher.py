@@ -53,13 +53,13 @@ class Launcher():
         tk.Button(self.root, text="Stop VO", command=lambda: self.StopProcess("RunVO")).grid(row=3, column=1, pady=10, padx=5)
 
         tk.Button(self.root, text="Visualize VO output", command=self.RunLocTest).grid(row=4, column=0, pady=10, padx=5)
-        tk.Button(self.root, text="Stop Visualize VO output", command=lambda: self.StopProcess("RunLocTest")).grid(row=4, column=1, pady=10, padx=5)
+        tk.Button(self.root, text="Stop Visualizing VO output", command=lambda: self.StopProcess("RunLocTest")).grid(row=4, column=1, pady=10, padx=5)
 
-        tk.Button(self.root, text="Generate Costmap", command=self.RunDensePC).grid(row=5, column=0, pady=10, padx=5)
-        tk.Button(self.root, text="Stop Generate Costmap", command=lambda: self.StopProcess("RunDensePC")).grid(row=5, column=1, pady=10, padx=5)
+        tk.Button(self.root, text="Generate Dense PC", command=self.RunDensePC).grid(row=5, column=0, pady=10, padx=5)
+        tk.Button(self.root, text="Stop Generating Dense PC", command=lambda: self.StopProcess("RunDensePC")).grid(row=5, column=1, pady=10, padx=5)
 
     # Start master:
-    def start_ros_master(self): 
+    def StartRosMaster(self): 
         # Roscore:
         master_process = subprocess.Popen(["roscore"])
         self.process_dict['roscore'] = master_process
@@ -68,7 +68,7 @@ class Launcher():
         time.sleep(2)      
 
     # Shutdown function:
-    def on_closing(self):  
+    def Shutdown(self):  
         # Shutdown ROS nodes:
         def shutdown_ros_nodes():
             os.system("rosnode list | xargs -n1 rosnode kill")   
@@ -163,9 +163,9 @@ if __name__ == '__main__':
     # Activate launcher:
     try: 
         ri = Launcher()
-        ri.start_ros_master()
-        rospy.init_node('output_subscriber')
-        ri.root.protocol("WM_DELETE_WINDOW", ri.on_closing)
+        ri.StartRosMaster()
+        rospy.init_node('launcher')
+        ri.root.protocol("WM_DELETE_WINDOW", ri.Shutdown)
         ri.root.mainloop()
     except rospy.ROSInterruptException:
         pass

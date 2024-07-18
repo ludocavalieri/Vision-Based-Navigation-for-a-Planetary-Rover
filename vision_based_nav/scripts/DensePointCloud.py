@@ -149,12 +149,12 @@ class PointCloudNode():
         # Plot disparity:
         if self.disparity is not None:
             plt.figure()
-            plt.imshow(self.disparity,'turbo')
+            plt.imshow(self.disparity,'jet')
             plt.title('Disparity Map')
 
         if self.depth is not None:
             plt.figure()
-            plt.imshow(self.depth,'flag')
+            plt.imshow(self.depth,'jet')
             plt.title('Depth Map')
         
         # Show plots:
@@ -173,7 +173,7 @@ class PointCloudNode():
         rospy.loginfo("Subscribed to /image_left and /image_right.")
 
         # Main loop:
-        rate = rospy.Rate(1)  # 1 Hz
+        rate = rospy.Rate(0.5)  # 0.5 Hz
         while not rospy.is_shutdown():
             self.Reconstruction3D()
             self.PointsTocostmap()
