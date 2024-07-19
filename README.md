@@ -88,7 +88,7 @@ We report some examples of reconstructed trajectories obtained with the provided
 
 ## Results on Katwijk dataset
 
-![Position and orientation errors.](<vision_based_nav/figures/VOerrors_FAST SGBM kwjk.png>) 
+![Position and orientation errors.](<vision_based_nav/figures/VOerrors_FAST_SGBM_kwjk.png>) 
 ![Reconstructed trajectory.](<vision_based_nav/figures/VO_FAST_SGBM_kwjk.png>)
 
 ## Results in simulated environment
