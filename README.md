@@ -1,6 +1,6 @@
 # Vision-based Navigation for a Planetary Rover
 
-This repository contains the Colab notebook and ROS package used to perform visual odometry with the ESA Katwijk beach dataset and in a simulated environment, respectively.
+This repository contains the Google Colab notebook and ROS package used to perform visual odometry with the ESA Katwijk beach dataset and in a simulated environment, respectively.
 
 # Abstract
 
