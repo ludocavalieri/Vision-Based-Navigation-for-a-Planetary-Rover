@@ -1,6 +1,6 @@
 # Vision-based Navigation for a Planetary Rover
 
-This repository contains the Colab notebook and ROS package used to perform visual odometry with the ESA Katwijck beach dataset and in a simulated environment, respectively.
+This repository contains the Colab notebook and ROS package used to perform visual odometry with the ESA Katwijk beach dataset and in a simulated environment, respectively.
 
 # Abstract
 
@@ -42,7 +42,7 @@ Mean absolute orientation error along the whole trajectory divided by the total 
 ## Visual odometry with Katwijk dataset
 
 ## Dataset 
-For testing of the the 'Real Environment' performances the 'Katwijk beach planetary rover dataset' was used. The dataset was collected on the Katwijk beach in Netherlands near the ESA-ESTEC site. The objective was to create a reference dataset for development and testing of future ESA's Mars Exploration ROvers capabilities in an analog terrain. For this reason, several artificial boulders were placed in order to reproduce the measured rock density correspondent to the deputy landing site of ExoMars missions. Morover the Heavy Duty Planetary Rover (HDPR) was used to collect data since it represents a good model of the ExoMars rovers. It is a rocker-bogie-style rover with multiple sensors (LocCam, PAnCam, LiDAR, ToF camera). The data used in this work where the 1024x768 RGB images from the PointGrey Bumblebee2 stereocamera and the GPS RTK collected data inUTM-31 frame, to reconstruct the ground truth.
+For testing of the the 'Real Environment' performances the 'Katwijk beach planetary rover dataset' was used. The dataset was collected on the Katwijk beach in Netherlands near the ESA-ESTEC site. The objective was to create a reference dataset for development and testing of future ESA's Mars Exploration Rovers capabilities in an analog terrain. For this reason, several artificial boulders were placed in order to reproduce the measured rock density correspondent to the deputy landing site of ExoMars missions. Morover the Heavy Duty Planetary Rover (HDPR) was used to collect data since it represents a good model of the ExoMars rovers. It is a rocker-bogie-style rover with multiple sensors (LocCam, PanCam, LiDAR, ToF camera). The data used in this work where the 1024x768 RGB images from the PointGrey Bumblebee2 stereocamera and the GPS RTK collected data inUTM-31 frame, to reconstruct the ground truth.
 
 ### Perform visual odometry and evaluate its performance 
 The pipeline was implemented in Google Colab and its available in the notebook 'KatwijkVO' available in the repository. To run the code it is necessary to have the Transverse 3 - Part 1 dataset downloaded on Google Drive and mount the drive, then setup the correct path to the folder containing the dataset. The first set of cells implements the pipeline functions and briefly comments hw they work. The second parth of the notebook shows of the test of the 8 combinations of the different descriptor and matcher and their respective performances.
@@ -80,7 +80,7 @@ rosrun vision_based_nav LocalizationTest.py
 for simplicity, all these commands can also be executed thanks to [Launcher.py](vision_based_nav/scripts/Launcher.py), a simple GUI which enables starting the simulation, running [VOnode.py](vision_based_nav/scripts/VOnode.py), running [LocalizationTest.py](vision_based_nav/scripts/LocalizationTest.py), as well as [DensePointCloud.py](vision_based_nav/scripts/DensePointCloud.py), which simply publishes a dense PointCloud message which can be used for mapping applications. A rudimental 2D projection is also implemented which can serve as foundation for future implementation of a geometrically-derived costmap.
 To launch the GUI, run the following command from terminal (which should be sourced):  
 ~~~
-rosrun vision_based_nav VOnode.py
+rosrun vision_based_nav Launcher.py
 ~~~
 
 # Expected Results
